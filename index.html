@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JHZ LightDoor BLE 控制面板</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; }
+    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 500px; }
+    h2 { margin-top: 0; color: #007bff; font-size: 1.2rem; }
+    button { padding: 10px 15px; border: none; border-radius: 4px; background-color: #007bff; color: white; cursor: pointer; font-size: 14px; margin: 2px; }
+    button:disabled { background-color: #cccccc; cursor: not-allowed; }
+    button.off { background-color: #dc3545; }
+    .status { font-weight: bold; margin-left: 10px; }
+    .connected { color: #28a745; }
+    .disconnected { color: #dc3545; }
+    .form-group { margin-bottom: 12px; }
+    label { display: inline-block; width: 160px; }
+    input[type="number"], input[type="time"], input[type="text"], input[type="password"] { width: 160px; padding: 6px; }
+    .channel-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .sub-option { padding-left: 20px; font-size: 0.9rem; color: #555; background-color: #fafafa; }
+  </style>
+</head>
+<body>
+
+  <h1>JHZ LightDoor BLE 控制面板</h1>
+
+  <!-- 1. 藍芽連線區 -->
+  <div class="card">
+    <h2>1. 藍芽連線</h2>
+    <button id="connectBtn" onclick="connectBLE()">連接 JHZ LightDoor</button>
+    <button id="disconnectBtn" onclick="disconnectBLE()" disabled class="off">斷開連線</button>
+    <span id="statusText" class="status disconnected">未連線</span>
+  </div>
+
+  <!-- 2. SSWinfo.json 設定區 -->
+  <div class="card">
+    <h2>2. SSWinfo.json 設定</h2>
+    
+    <!-- Wi-Fi 設定 -->
+    <div style="background-color: #eef5ff; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+      <strong style="color: #0056b3;">Wi-Fi 網路對時設定：</strong>
+      <div class="channel-row" style="border: none;">
+        <label for="wifiSsid">Wi-Fi 名稱 (SSID):</label>
+        <input type="text" id="wifiSsid" placeholder="留空不聯網">
+      </div>
+      <div class="channel-row" style="border: none;">
+        <label for="wifiPass">Wi-Fi 密碼:</label>
+        <input type="password" id="wifiPass" placeholder="無密碼可留空">
+      </div>
+      <small style="color: #666;">* 若留空或連線失敗，將自動跳過網路對時。</small>
+    </div>
+
+    <div class="form-group">
+      <label><input type="checkbox" id="interlockCheckbox"> 0, 1, 2 通道互鎖</label>
+    </div>
+    
+    <div class="form-group">
+      <div class="channel-row">
+        <label for="ch0">通道 0 秒數 (0-9999):</label>
+        <input type="number" id="ch0" min="0" max="9999" value="0">
+      </div>
+      <div class="channel-row">
+        <label for="ch1">通道 1 秒數 (0-9999):</label>
+        <input type="number" id="ch1" min="0" max="9999" value="0">
+      </div>
+      <div class="channel-row">
+        <label for="ch2">通道 2 秒數 (0-9999):</label>
+        <input type="number" id="ch2" min="0" max="9999" value="0">
+      </div>
+      <div class="channel-row">
+        <label for="ch3">通道 3 秒數 (0-9999):</label>
+        <input type="number" id="ch3" min="0" max="9999" value="0">
+      </div>
+      <div class="channel-row sub-option">
+        <label for="ch3OnTime">↳ 通道3 定時開啟:</label>
+        <input type="time" id="ch3OnTime" value="08:00">
+      </div>
+      <div class="channel-row sub-option">
+        <label for="ch3OffTime">↳ 通道3 定時關閉:</label>
+        <input type="time" id="ch3OffTime" value="18:00">
+      </div>
+    </div>
+    <br>
+    <button id="saveBtn" onclick="sendConfig()" disabled>寫入設定檔 (Save JSON)</button>
+    <button id="readBtn" onclick="requestConfig()" disabled style="background-color: #17a2b8;">重新讀取設定</button>
+  </div>
+
+  <!-- 3. 通道測試區 -->
+  <div class="card">
+    <h2>3. 通道測試</h2>
+    <div class="channel-row">
+      <span>通道 0：</span>
+      <div>
+        <button onclick="controlChannel(0, true)" class="testBtn" disabled>開啟</button>
+        <button onclick="controlChannel(0, false)" class="testBtn off" disabled>關閉</button>
+      </div>
+    </div>
+    <div class="channel-row">
+      <span>通道 1：</span>
+      <div>
+        <button onclick="controlChannel(1, true)" class="testBtn" disabled>開啟</button>
+        <button onclick="controlChannel(1, false)" class="testBtn off" disabled>關閉</button>
+      </div>
+    </div>
+    <div class="channel-row">
+      <span>通道 2：</span>
+      <div>
+        <button onclick="controlChannel(2, true)" class="testBtn" disabled>開啟</button>
+        <button onclick="controlChannel(2, false)" class="testBtn off" disabled>關閉</button>
+      </div>
+    </div>
+    <div class="channel-row">
+      <span>通道 3：</span>
+      <div>
+        <button onclick="controlChannel(3, true)" class="testBtn" disabled>開啟</button>
+        <button onclick="controlChannel(3, false)" class="testBtn off" disabled>關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+    let bleDevice = null;
+    let gattCharacteristic = null;
+
+    async function connectBLE() {
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'JHZ_4P_BLE_' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        gattCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        await gattCharacteristic.startNotifications();
+        gattCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
+
+        updateUI(true);
+        setTimeout(requestConfig, 500);
+      } catch (error) {
+        alert("連線失敗: " + error.message);
+      }
+    }
+
+    function handleBLEData(event) {
+      const decoder = new TextDecoder('utf-8');
+      const msg = decoder.decode(event.target.value);
+
+      if (msg.startsWith("CFG_DATA:")) {
+        try {
+          const config = JSON.parse(msg.substring(9));
+          document.getElementById('wifiSsid').value = config.ssid || "";
+          document.getElementById('wifiPass').value = config.password || "";
+          document.getElementById('interlockCheckbox').checked = config.interlock;
+          if (config.channels && config.channels.length >= 4) {
+            document.getElementById('ch0').value = config.channels[0].duration;
+            document.getElementById('ch1').value = config.channels[1].duration;
+            document.getElementById('ch2').value = config.channels[2].duration;
+            document.getElementById('ch3').value = config.channels[3].duration;
+            document.getElementById('ch3OnTime').value = config.channels[3].onTime || "08:00";
+            document.getElementById('ch3OffTime').value = config.channels[3].offTime || "18:00";
+          }
+        } catch (e) {
+          console.error("JSON 解析失敗:", e);
+        }
+      }
+    }
+
+    async function requestConfig() {
+      if (!gattCharacteristic) return;
+      const encoder = new TextEncoder();
+      try {
+        await gattCharacteristic.writeValue(encoder.encode("GET_CFG"));
+      } catch (error) {
+        console.error("請求設定檔失敗:", error);
+      }
+    }
+
+    function disconnectBLE() {
+      if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+    }
+
+    function onDisconnected() {
+      updateUI(false);
+      alert("藍芽連線已中斷！");
+    }
+
+    async function sendConfig() {
+      if (!gattCharacteristic) return;
+
+      const configData = {
+        ssid: document.getElementById('wifiSsid').value.trim(),
+        password: document.getElementById('wifiPass').value,
+        interlock: document.getElementById('interlockCheckbox').checked,
+        channels: [
+          { duration: parseInt(document.getElementById('ch0').value) || 0 },
+          { duration: parseInt(document.getElementById('ch1').value) || 0 },
+          { duration: parseInt(document.getElementById('ch2').value) || 0 },
+          { 
+            duration: parseInt(document.getElementById('ch3').value) || 0,
+            onTime: document.getElementById('ch3OnTime').value,
+            offTime: document.getElementById('ch3OffTime').value
+          }
+        ]
+      };
+
+      const payload = "CFG:" + JSON.stringify(configData);
+      const encoder = new TextEncoder();
+      
+      try {
+        await gattCharacteristic.writeValue(encoder.encode(payload));
+        alert("設定已寫入 JHZ LightDoor 並更新 JSON！");
+      } catch (error) {
+        alert("寫入失敗: " + error.message);
+      }
+    }
+
+    async function controlChannel(ch, state) {
+      if (!gattCharacteristic) return;
+      const cmd = `CMD:CH=${ch},STATE=${state ? 1 : 0}`;
+      const encoder = new TextEncoder();
+      try {
+        await gattCharacteristic.writeValue(encoder.encode(cmd));
+      } catch (error) {
+        console.error("指令發送失敗:", error);
+      }
+    }
+
+    function updateUI(isConnected) {
+      const statusText = document.getElementById('statusText');
+      document.getElementById('connectBtn').disabled = isConnected;
+      document.getElementById('disconnectBtn').disabled = !isConnected;
+      document.getElementById('saveBtn').disabled = !isConnected;
+      document.getElementById('readBtn').disabled = !isConnected;
+
+      const testBtns = document.querySelectorAll('.testBtn');
+      testBtns.forEach(btn => btn.disabled = !isConnected);
+
+      if (isConnected) {
+        statusText.textContent = "已連線 (" + bleDevice.name + ")";
+        statusText.className = "status connected";
+      } else {
+        statusText.textContent = "未連線";
+        statusText.className = "status disconnected";
+      }
+    }
+  </script>
+</body>
+</html>
