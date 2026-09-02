@@ -148,6 +148,83 @@
         </div>
         <div id="collapseParams" class="collapse">
             <div class="card-body">
+                <!-- 每日定時開關機設定 (依通道) -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-primary">📅 通道每日定時開機 / 關機設定</label>
+                    <div class="row g-3">
+                        <!-- CH0 -->
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="fw-bold small d-block mb-1">通道 0 (CH1)</span>
+                                <div class="input-group input-group-sm mb-1">
+                                    <span class="input-group-text">定時開機</span>
+                                    <input type="time" id="ch0OnTime" class="form-control">
+                                    <button class="btn btn-outline-success" onclick="sendChannelSchedule(0, 'ON')">設定</button>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">定時關機</span>
+                                    <input type="time" id="ch0OffTime" class="form-control">
+                                    <button class="btn btn-outline-danger" onclick="sendChannelSchedule(0, 'OFF')">設定</button>
+                                    <button class="btn btn-outline-secondary" onclick="clearChannelSchedule(0)" title="清除 CH0 所有定時">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- CH1 -->
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="fw-bold small d-block mb-1">通道 1 (CH2)</span>
+                                <div class="input-group input-group-sm mb-1">
+                                    <span class="input-group-text">定時開機</span>
+                                    <input type="time" id="ch1OnTime" class="form-control">
+                                    <button class="btn btn-outline-success" onclick="sendChannelSchedule(1, 'ON')">設定</button>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">定時關機</span>
+                                    <input type="time" id="ch1OffTime" class="form-control">
+                                    <button class="btn btn-outline-danger" onclick="sendChannelSchedule(1, 'OFF')">設定</button>
+                                    <button class="btn btn-outline-secondary" onclick="clearChannelSchedule(1)" title="清除 CH1 所有定時">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- CH2 -->
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="fw-bold small d-block mb-1">通道 2 (CH3)</span>
+                                <div class="input-group input-group-sm mb-1">
+                                    <span class="input-group-text">定時開機</span>
+                                    <input type="time" id="ch2OnTime" class="form-control">
+                                    <button class="btn btn-outline-success" onclick="sendChannelSchedule(2, 'ON')">設定</button>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">定時關機</span>
+                                    <input type="time" id="ch2OffTime" class="form-control">
+                                    <button class="btn btn-outline-danger" onclick="sendChannelSchedule(2, 'OFF')">設定</button>
+                                    <button class="btn btn-outline-secondary" onclick="clearChannelSchedule(2)" title="清除 CH2 所有定時">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- CH3 -->
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="fw-bold small d-block mb-1">通道 3 (CH4)</span>
+                                <div class="input-group input-group-sm mb-1">
+                                    <span class="input-group-text">定時開機</span>
+                                    <input type="time" id="ch3OnTime" class="form-control">
+                                    <button class="btn btn-outline-success" onclick="sendChannelSchedule(3, 'ON')">設定</button>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">定時關機</span>
+                                    <input type="time" id="ch3OffTime" class="form-control">
+                                    <button class="btn btn-outline-danger" onclick="sendChannelSchedule(3, 'OFF')">設定</button>
+                                    <button class="btn btn-outline-secondary" onclick="clearChannelSchedule(3)" title="清除 CH3 所有定時">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
                 <!-- 延遲自動關閉 -->
                 <div class="mb-4">
                     <label class="form-label fw-bold small text-primary">⏱️ 設定延遲自動關閉秒數 (0 代表不開啟倒數)</label>
@@ -317,15 +394,13 @@
         }
     }
 
-    // --- 單一按鈕點擊：立刻翻轉 UI 並發送指令 ---
+    // --- 單一按鈕點擊：翻轉 UI 並發送指令 ---
     function toggleSingleRelay(ch) {
-        // 1. 翻轉狀態
+        // 翻轉狀態並更新 UI
         relayStates[ch] = !relayStates[ch]; 
-        
-        // 2. 立即強行更新 UI 畫面
         updateRelayButtonUI(ch, relayStates[ch]); 
         
-        // 3. 發送指令 (如 0-1 或 0-0)
+        // 發送指令 (如 0-1 或 0-0)
         const stateVal = relayStates[ch] ? 1 : 0;
         sendCommand(`${ch}-${stateVal}`); 
     }
@@ -346,26 +421,28 @@
         dataStr = dataStr.trim();
 
         // 情況 A：JSON 格式 (如 {"relays":[1,0,0,0]})
-        try {
-            const data = JSON.parse(dataStr);
-            if (data && Array.isArray(data.relays)) {
-                data.relays.forEach((state, ch) => {
-                    if (ch < 4) {
-                        relayStates[ch] = (state === 1);
-                        updateRelayButtonUI(ch, relayStates[ch]);
-                    }
-                });
-                return;
+        if (dataStr.startsWith('{')) {
+            try {
+                const data = JSON.parse(dataStr);
+                if (data && Array.isArray(data.relays)) {
+                    data.relays.forEach((state, ch) => {
+                        if (ch < 4) {
+                            relayStates[ch] = (state === 1 || state === true);
+                            updateRelayButtonUI(ch, relayStates[ch]);
+                        }
+                    });
+                    return;
+                }
+            } catch (e) {
+                console.error("JSON 解析錯誤:", e);
             }
-        } catch (e) {
-            // 非 JSON，繼續往下解析
         }
 
-        // 情況 B：簡易指令回傳格式 (如 "0-1", "0-0", "1-1")
+        // 情況 B：單通道回傳格式 (如 "0-1", "0-0", "CH0:1")
         if (dataStr.includes('-')) {
             const parts = dataStr.split('-');
-            const ch = parseInt(parts[0]);
-            const val = parseInt(parts[1]);
+            const ch = parseInt(parts[0], 10);
+            const val = parseInt(parts[1], 10);
             if (!isNaN(ch) && !isNaN(val) && ch >= 0 && ch < 4) {
                 relayStates[ch] = (val === 1);
                 updateRelayButtonUI(ch, relayStates[ch]);
@@ -422,7 +499,7 @@
                 });
                 log('BLE 通知機制 (Notification) 已啟用。', 'OK');
             } catch(e) {
-                log('BLE 特徵值未開啟 Notification，改以點擊即時切換。', 'INFO');
+                log('BLE 特徵值未開啟 Notification，將依手動點擊切換。', 'INFO');
             }
 
             document.getElementById('bleStatus').className = 'badge bg-success status-badge';
@@ -482,7 +559,7 @@
             document.getElementById('btnConnectMQTT').className = 'btn btn-danger w-100';
             log('MQTT WebSocket 連線成功！', 'OK');
 
-            // 自動訂閱項目下所有狀態 Topic
+            // 自動訂閱廣義與狀態 Topic (例如: "JHZGDTry001/#")
             let baseTopic = cmdTopic.includes('/') ? cmdTopic.split('/')[0] : cmdTopic;
             let subTopic = baseTopic + '/#';
 
@@ -510,20 +587,52 @@
     }
 
     // --- 高級指令輔助發送 ---
+    function sendChannelSchedule(ch, type) {
+        const inputId = type === 'ON' ? `ch${ch}OnTime` : `ch${ch}OffTime`;
+        const timeVal = document.getElementById(inputId).value;
+        if (timeVal) {
+            // 發送指令格式：ON_TIME:0,08:00 或 OFF_TIME:0,18:00
+            sendCommand(`${type}_TIME:${ch},${timeVal}`);
+        } else {
+            alert(`請先選擇 CH${ch} 的${type === 'ON' ? '開機' : '關機'}時間！`);
+        }
+    }
+
+    function clearChannelSchedule(ch) {
+        document.getElementById(`ch${ch}OnTime`).value = '';
+        document.getElementById(`ch${ch}OffTime`).value = '';
+        // 發送清空指令：CLR_TIME:0
+        sendCommand(`CLR_TIME:${ch}`);
+    }
+
     function sendDelay(ch) {
-        const sec = document.getElementById(`delay${ch}`).value;
-        if (sec >= 0 && sec <= 9999) sendCommand(`T${ch}-${sec}`);
+        const inputElem = document.getElementById(`delay${ch}`);
+        if (!inputElem) return;
+        const sec = parseInt(inputElem.value, 10);
+        if (!isNaN(sec) && sec >= 0 && sec <= 9999) {
+            sendCommand(`T${ch}-${sec}`);
+        } else {
+            alert('請輸入有效的秒數 (0-9999)');
+        }
     }
 
     function setRebootTime() {
         const timeVal = document.getElementById('rebootTime').value;
-        if (timeVal) sendCommand(`R${timeVal}`);
+        if (timeVal) {
+            sendCommand(`R${timeVal}`);
+        } else {
+            alert('請選擇重開機時間！');
+        }
     }
 
     function setWiFi() {
         const ssid = document.getElementById('wifiSSID').value.trim();
         const pass = document.getElementById('wifiPASS').value.trim();
-        if (ssid) sendCommand(`WIFI:${ssid},${pass}`);
+        if (ssid) {
+            sendCommand(`WIFI:${ssid},${pass}`);
+        } else {
+            alert('請輸入有效的 WiFi SSID！');
+        }
     }
 
     function setEspMqttConfig() {
@@ -531,7 +640,11 @@
         const p = document.getElementById('cfgMqttPort').value.trim();
         const u = document.getElementById('cfgMqttUser').value.trim();
         const w = document.getElementById('cfgMqttPass').value.trim();
-        if (s && p) sendCommand(`MQTT:${s},${p},${u},${w}`);
+        if (s && p) {
+            sendCommand(`MQTT:${s},${p},${u},${w}`);
+        } else {
+            alert('請務必填寫 MQTT Server 網址與 Port！');
+        }
     }
 </script>
 
