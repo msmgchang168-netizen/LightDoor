@@ -1,256 +1,539 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JHZ LightDoor BLE 控制面板</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; }
-    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 500px; }
-    h2 { margin-top: 0; color: #007bff; font-size: 1.2rem; }
-    button { padding: 10px 15px; border: none; border-radius: 4px; background-color: #007bff; color: white; cursor: pointer; font-size: 14px; margin: 2px; }
-    button:disabled { background-color: #cccccc; cursor: not-allowed; }
-    button.off { background-color: #dc3545; }
-    .status { font-weight: bold; margin-left: 10px; }
-    .connected { color: #28a745; }
-    .disconnected { color: #dc3545; }
-    .form-group { margin-bottom: 12px; }
-    label { display: inline-block; width: 160px; }
-    input[type="number"], input[type="time"], input[type="text"], input[type="password"] { width: 160px; padding: 6px; }
-    .channel-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .sub-option { padding-left: 20px; font-size: 0.9rem; color: #555; background-color: #fafafa; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 智慧控制面板 (BLE / MQTT)</title>
+    <!-- 引入 Bootstrap 5 UI 框架 與 MQTT.js -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .card { border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: none; margin-bottom: 20px; overflow: hidden; }
+        .card-header { background-color: #fff; border-bottom: 1px solid #edf2f7; font-weight: bold; }
+        .status-badge { font-size: 0.85rem; padding: 6px 12px; border-radius: 20px; }
+        .log-box { background: #1e1e1e; color: #4ec9b0; font-family: monospace; height: 180px; overflow-y: auto; padding: 10px; border-radius: 8px; font-size: 0.85rem; }
+        
+        /* 黑底按鈕自訂樣式 */
+        .btn-black-off {
+            background-color: #000000 !important;
+            color: #dc3545 !important;
+            border: 2px solid #dc3545 !important;
+            font-weight: bold;
+        }
+        .btn-black-on {
+            background-color: #000000 !important;
+            color: #198754 !important;
+            border: 2px solid #198754 !important;
+            font-weight: bold;
+        }
+
+        .accordion-button:not(.collapsed) {
+            background-color: #ffffff;
+            color: #212529;
+            box-shadow: none;
+        }
+        .accordion-button:focus {
+            box-shadow: none;
+            border-color: rgba(0,0,0,.125);
+        }
+    </style>
 </head>
-<body>
+<body class="py-4">
 
-  <h1>JHZ LightDoor BLE 控制面板</h1>
+<div class="container" style="max-width: 950px;">
+    <h3 class="mb-4 text-center fw-bold text-primary">ESP32 智慧繼電器控制面板</h3>
 
-  <!-- 1. 藍芽連線區 -->
-  <div class="card">
-    <h2>1. 藍芽連線</h2>
-    <button id="connectBtn" onclick="connectBLE()">連接 JHZ LightDoor</button>
-    <button id="disconnectBtn" onclick="disconnectBLE()" disabled class="off">斷開連線</button>
-    <span id="statusText" class="status disconnected">未連線</span>
-  </div>
+    <!-- 1. 連線通道設定 (BLE / MQTT) -->
+    <div class="row">
+        <!-- BLE 藍牙控制卡片 -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>📡 Web BLE 藍牙連線</span>
+                    <span id="bleStatus" class="badge bg-secondary status-badge">未連線</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">請使用 Chrome / Edge 瀏覽器，開啟藍牙搜尋 ESP32 裝置。</p>
+                    <button id="btnConnectBLE" class="btn btn-primary w-100 mb-2" onclick="connectBLE()">搜尋並連線 BLE</button>
+                    <button id="btnDisconnectBLE" class="btn btn-outline-danger w-100" onclick="disconnectBLE()" disabled>中斷 BLE 連線</button>
+                </div>
+            </div>
+        </div>
 
-  <!-- 2. SSWinfo.json 設定區 -->
-  <div class="card">
-    <h2>2. SSWinfo.json 設定</h2>
-    
-    <!-- Wi-Fi 設定 -->
-    <div style="background-color: #eef5ff; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
-      <strong style="color: #0056b3;">Wi-Fi 網路對時設定：</strong>
-      <div class="channel-row" style="border: none;">
-        <label for="wifiSsid">Wi-Fi 名稱 (SSID):</label>
-        <input type="text" id="wifiSsid" placeholder="留空不聯網">
-      </div>
-      <div class="channel-row" style="border: none;">
-        <label for="wifiPass">Wi-Fi 密碼:</label>
-        <input type="password" id="wifiPass" placeholder="無密碼可留空">
-      </div>
-      <small style="color: #666;">* 若留空或連線失敗，將自動跳過網路對時。</small>
+        <!-- MQTT 連線卡片 -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>🌐 MQTT WebSocket 連線</span>
+                    <span id="mqttStatus" class="badge bg-secondary status-badge">未連線</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-8">
+                            <input type="text" id="mqttHost" class="form-control form-control-sm" placeholder="wss://broker.emqx.io:8084/mqtt" value="wss://y12177fb.ala.asia-southeast1.emqxsl.com:8084/mqtt">
+                        </div>
+                        <div class="col-4">
+                            <input type="text" id="mqttUser" class="form-control form-control-sm" placeholder="帳號" value="JHZGDTry001">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <input type="password" id="mqttPass" class="form-control form-control-sm" placeholder="密碼" value="">
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="mqttTopic" class="form-control form-control-sm" placeholder="Topic" value="JHZGDTry001/cmd">
+                        </div>
+                    </div>
+                    <button id="btnConnectMQTT" class="btn btn-success w-100" onclick="toggleMQTT()">連線 MQTT</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-      <label><input type="checkbox" id="interlockCheckbox"> 0, 1, 2 通道互鎖</label>
+    <!-- 2. 繼電器即時控制區 -->
+    <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center p-0">
+            <button class="accordion-button fw-bold py-3 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRelay" aria-expanded="true" aria-controls="collapseRelay">
+                ⚡ 繼電器即時控制
+            </button>
+            <div class="pe-3 d-flex align-items-center" style="z-index: 5; text-wrap: nowrap;">
+                <button class="btn btn-sm btn-success me-2" onclick="setAllRelays(1)">全開 (+1)</button>
+                <button class="btn btn-sm btn-danger" onclick="setAllRelays(0)">全關 (+0)</button>
+            </div>
+        </div>
+        <div id="collapseRelay" class="collapse show">
+            <div class="card-body">
+                <div class="row text-center g-3">
+                    <!-- 通道 0 -->
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="fw-bold">通道 0 (CH1)</h6>
+                            <button id="btnRelay0" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(0)">關閉</button>
+                        </div>
+                    </div>
+                    <!-- 通道 1 -->
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="fw-bold">通道 1 (CH2)</h6>
+                            <button id="btnRelay1" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(1)">關閉</button>
+                        </div>
+                    </div>
+                    <!-- 通道 2 -->
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="fw-bold">通道 2 (CH3)</h6>
+                            <button id="btnRelay2" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(2)">關閉</button>
+                        </div>
+                    </div>
+                    <!-- 通道 3 -->
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="fw-bold">通道 3 (CH4)</h6>
+                            <button id="btnRelay3" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(3)">關閉</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
-    <div class="form-group">
-      <div class="channel-row">
-        <label for="ch0">通道 0 秒數 (0-9999):</label>
-        <input type="number" id="ch0" min="0" max="9999" value="0">
-      </div>
-      <div class="channel-row">
-        <label for="ch1">通道 1 秒數 (0-9999):</label>
-        <input type="number" id="ch1" min="0" max="9999" value="0">
-      </div>
-      <div class="channel-row">
-        <label for="ch2">通道 2 秒數 (0-9999):</label>
-        <input type="number" id="ch2" min="0" max="9999" value="0">
-      </div>
-      <div class="channel-row">
-        <label for="ch3">通道 3 秒數 (0-9999):</label>
-        <input type="number" id="ch3" min="0" max="9999" value="0">
-      </div>
-      <div class="channel-row sub-option">
-        <label for="ch3OnTime">↳ 通道3 定時開啟:</label>
-        <input type="time" id="ch3OnTime" value="08:00">
-      </div>
-      <div class="channel-row sub-option">
-        <label for="ch3OffTime">↳ 通道3 定時關閉:</label>
-        <input type="time" id="ch3OffTime" value="18:00">
-      </div>
-    </div>
-    <br>
-    <button id="saveBtn" onclick="sendConfig()" disabled>寫入設定檔 (Save JSON)</button>
-    <button id="readBtn" onclick="requestConfig()" disabled style="background-color: #17a2b8;">重新讀取設定</button>
-  </div>
 
-  <!-- 3. 通道測試區 -->
-  <div class="card">
-    <h2>3. 通道測試</h2>
-    <div class="channel-row">
-      <span>通道 0：</span>
-      <div>
-        <button onclick="controlChannel(0, true)" class="testBtn" disabled>開啟</button>
-        <button onclick="controlChannel(0, false)" class="testBtn off" disabled>關閉</button>
-      </div>
-    </div>
-    <div class="channel-row">
-      <span>通道 1：</span>
-      <div>
-        <button onclick="controlChannel(1, true)" class="testBtn" disabled>開啟</button>
-        <button onclick="controlChannel(1, false)" class="testBtn off" disabled>關閉</button>
-      </div>
-    </div>
-    <div class="channel-row">
-      <span>通道 2：</span>
-      <div>
-        <button onclick="controlChannel(2, true)" class="testBtn" disabled>開啟</button>
-        <button onclick="controlChannel(2, false)" class="testBtn off" disabled>關閉</button>
-      </div>
-    </div>
-    <div class="channel-row">
-      <span>通道 3：</span>
-      <div>
-        <button onclick="controlChannel(3, true)" class="testBtn" disabled>開啟</button>
-        <button onclick="controlChannel(3, false)" class="testBtn off" disabled>關閉</button>
-      </div>
-    </div>
-  </div>
+    <!-- 3. 系統與邏輯參數設定區 -->
+    <div class="card">
+        <div class="card-header p-0">
+            <button class="accordion-button collapsed fw-bold py-3 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParams" aria-expanded="false" aria-controls="collapseParams">
+                ⚙️ 系統與邏輯參數設定
+            </button>
+        </div>
+        <div id="collapseParams" class="collapse">
+            <div class="card-body">
+                <!-- 延遲自動關閉 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-primary">⏱️ 設定延遲自動關閉秒數 (0 代表不開啟倒數)</label>
+                    <div class="row g-2">
+                        <div class="col-6 col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">CH0</span>
+                                <input type="number" id="delay0" class="form-control" placeholder="秒數" value="0">
+                                <button class="btn btn-outline-primary" onclick="sendDelay(0)">設定</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">CH1</span>
+                                <input type="number" id="delay1" class="form-control" placeholder="秒數" value="0">
+                                <button class="btn btn-outline-primary" onclick="sendDelay(1)">設定</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">CH2</span>
+                                <input type="number" id="delay2" class="form-control" placeholder="秒數" value="0">
+                                <button class="btn btn-outline-primary" onclick="sendDelay(2)">設定</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">CH3</span>
+                                <input type="number" id="delay3" class="form-control" placeholder="秒數" value="0">
+                                <button class="btn btn-outline-primary" onclick="sendDelay(3)">設定</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-  <script>
-    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+                <!-- 通道互鎖防呆 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-primary">🔒 設定通道互鎖功能 (點擊可開關該通道互鎖)</label>
+                    <div class="row g-2 text-center">
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="d-block mb-1 small fw-bold">CH0 互鎖</span>
+                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L0-1')">開啟</button>
+                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L0-0')">關閉</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="d-block mb-1 small fw-bold">CH1 互鎖</span>
+                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L1-1')">開啟</button>
+                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L1-0')">關閉</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="d-block mb-1 small fw-bold">CH2 互鎖</span>
+                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L2-1')">開啟</button>
+                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L2-0')">關閉</button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <span class="d-block mb-1 small fw-bold">CH3 互鎖</span>
+                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L3-1')">開啟</button>
+                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L3-0')">關閉</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 每日定時重開機與配網 -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-primary">🔄 每日定時重開機設定 (RHH:MM)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="time" id="rebootTime" class="form-control" value="04:00">
+                            <button class="btn btn-outline-primary" onclick="setRebootTime()">設定時間</button>
+                            <button class="btn btn-outline-danger" onclick="sendCommand('R')">關閉重啟</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-primary">📶 發送新 WiFi 帳密配網 (WIFI:SSID,PASS)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="wifiSSID" class="form-control" placeholder="SSID">
+                            <input type="password" id="wifiPASS" class="form-control" placeholder="密碼">
+                            <button class="btn btn-outline-warning" onclick="setWiFi()">設定 WiFi</button>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 遠端更新 ESP32 內部的 MQTT 參數 -->
+                <label class="form-label fw-bold small text-primary">☁️ 一鍵遠端設定 ESP32 內部的 MQTT Broker 帳密</label>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <input type="text" id="cfgMqttServer" class="form-control form-control-sm" placeholder="Server 網址" value="y12177fb.ala.asia-southeast1.emqxsl.com">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" id="cfgMqttPort" class="form-control form-control-sm" placeholder="Port" value="8883">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" id="cfgMqttUser" class="form-control form-control-sm" placeholder="MQTT 帳號" value="JHZGDTry001">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="password" id="cfgMqttPass" class="form-control form-control-sm" placeholder="MQTT 密碼">
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-primary mt-2 w-100" onclick="setEspMqttConfig()">寫入 MQTT 參數至 ESP32 NVS Flash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 訊息數據日誌 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>📋 傳輸數據日誌 (Log)</span>
+            <button class="btn btn-sm btn-link text-decoration-none" onclick="clearLog()">清空 Log</button>
+        </div>
+        <div class="card-body p-2">
+            <div id="logBox" class="log-box">-- 系統初始化完成，等待連線... --<br></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // BLE 廣播服務與特徵 UUID
+    const SERVICE_UUID        = "19b10000-e8f2-537e-4f6c-d104768a1214";
+    const CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
 
     let bleDevice = null;
-    let gattCharacteristic = null;
+    let bleCharacteristic = null;
+    let mqttClient = null;
 
-    async function connectBLE() {
-      try {
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: 'JHZ_4P_BLE_' }],
-          optionalServices: [SERVICE_UUID]
-        });
+    // 通道狀態追蹤陣列 (false: 關閉, true: 開啟)
+    let relayStates = [false, false, false, false];
 
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-        const server = await bleDevice.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        gattCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-        await gattCharacteristic.startNotifications();
-        gattCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
-
-        updateUI(true);
-        setTimeout(requestConfig, 500);
-      } catch (error) {
-        alert("連線失敗: " + error.message);
-      }
+    // --- 日誌工具 ---
+    function log(msg, type = 'INFO') {
+        const logBox = document.getElementById('logBox');
+        const time = new Date().toLocaleTimeString();
+        logBox.innerHTML += `[${time}] [${type}] ${msg}<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
     }
 
-    function handleBLEData(event) {
-      const decoder = new TextDecoder('utf-8');
-      const msg = decoder.decode(event.target.value);
+    function clearLog() {
+        document.getElementById('logBox').innerHTML = '';
+    }
 
-      if (msg.startsWith("CFG_DATA:")) {
-        try {
-          const config = JSON.parse(msg.substring(9));
-          document.getElementById('wifiSsid').value = config.ssid || "";
-          document.getElementById('wifiPass').value = config.password || "";
-          document.getElementById('interlockCheckbox').checked = config.interlock;
-          if (config.channels && config.channels.length >= 4) {
-            document.getElementById('ch0').value = config.channels[0].duration;
-            document.getElementById('ch1').value = config.channels[1].duration;
-            document.getElementById('ch2').value = config.channels[2].duration;
-            document.getElementById('ch3').value = config.channels[3].duration;
-            document.getElementById('ch3OnTime').value = config.channels[3].onTime || "08:00";
-            document.getElementById('ch3OffTime').value = config.channels[3].offTime || "18:00";
-          }
-        } catch (e) {
-          console.error("JSON 解析失敗:", e);
+    // --- 核心：即時強制更新按鈕 UI 樣式與文字 ---
+    function updateRelayButtonUI(ch, isOn) {
+        const btn = document.getElementById(`btnRelay${ch}`);
+        if (!btn) return;
+
+        if (isOn) {
+            btn.className = "btn btn-black-on w-100 py-2";
+            btn.innerText = "開啟";
+            btn.style.color = "#198754";      // 亮綠字
+            btn.style.borderColor = "#198754";
+        } else {
+            btn.className = "btn btn-black-off w-100 py-2";
+            btn.innerText = "關閉";
+            btn.style.color = "#dc3545";      // 亮紅字
+            btn.style.borderColor = "#dc3545";
         }
-      }
     }
 
-    async function requestConfig() {
-      if (!gattCharacteristic) return;
-      const encoder = new TextEncoder();
-      try {
-        await gattCharacteristic.writeValue(encoder.encode("GET_CFG"));
-      } catch (error) {
-        console.error("請求設定檔失敗:", error);
-      }
+    // --- 單一按鈕點擊：立刻翻轉 UI 並發送指令 ---
+    function toggleSingleRelay(ch) {
+        // 1. 翻轉狀態
+        relayStates[ch] = !relayStates[ch]; 
+        
+        // 2. 立即強行更新 UI 畫面
+        updateRelayButtonUI(ch, relayStates[ch]); 
+        
+        // 3. 發送指令 (如 0-1 或 0-0)
+        const stateVal = relayStates[ch] ? 1 : 0;
+        sendCommand(`${ch}-${stateVal}`); 
+    }
+
+    // --- 全開 / 全關 控制 ---
+    function setAllRelays(state) {
+        const targetState = (state === 1);
+        for (let i = 0; i < 4; i++) {
+            relayStates[i] = targetState;
+            updateRelayButtonUI(i, targetState);
+        }
+        sendCommand(state === 1 ? '+1' : '+0');
+    }
+
+    // --- 解析來自 ESP32 回傳的狀態訊息 (支援 JSON 與 指令字串) ---
+    function parseStatusMessage(dataStr) {
+        if (!dataStr) return;
+        dataStr = dataStr.trim();
+
+        // 情況 A：JSON 格式 (如 {"relays":[1,0,0,0]})
+        try {
+            const data = JSON.parse(dataStr);
+            if (data && Array.isArray(data.relays)) {
+                data.relays.forEach((state, ch) => {
+                    if (ch < 4) {
+                        relayStates[ch] = (state === 1);
+                        updateRelayButtonUI(ch, relayStates[ch]);
+                    }
+                });
+                return;
+            }
+        } catch (e) {
+            // 非 JSON，繼續往下解析
+        }
+
+        // 情況 B：簡易指令回傳格式 (如 "0-1", "0-0", "1-1")
+        if (dataStr.includes('-')) {
+            const parts = dataStr.split('-');
+            const ch = parseInt(parts[0]);
+            const val = parseInt(parts[1]);
+            if (!isNaN(ch) && !isNaN(val) && ch >= 0 && ch < 4) {
+                relayStates[ch] = (val === 1);
+                updateRelayButtonUI(ch, relayStates[ch]);
+            }
+        }
+    }
+
+    // --- 發送指令核心 ---
+    function sendCommand(cmdStr) {
+        log(`準備發送指令: "${cmdStr}"`, 'SEND');
+
+        if (bleCharacteristic) {
+            const encoder = new TextEncoder();
+            bleCharacteristic.writeValue(encoder.encode(cmdStr))
+                .then(() => log(`[BLE] 指令已順利送出: ${cmdStr}`, 'OK'))
+                .catch(err => log(`[BLE] 發送失敗: ${err}`, 'ERR'));
+        } 
+        else if (mqttClient && mqttClient.connected) {
+            const topic = document.getElementById('mqttTopic').value.trim();
+            mqttClient.publish(topic, cmdStr, { qos: 0 }, (err) => {
+                if (!err) log(`[MQTT] 已發布至 ${topic}: ${cmdStr}`, 'OK');
+                else log(`[MQTT] 發布失敗: ${err}`, 'ERR');
+            });
+        } 
+        else {
+            alert('請先建立 BLE 藍牙連線 或 MQTT 連線！');
+            log('發送失敗：未建立任何連線通道。', 'WARN');
+        }
+    }
+
+    // --- BLE 藍牙連線與監聽 ---
+    async function connectBLE() {
+        try {
+            log('正在搜尋藍牙裝置...');
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'JHZ-GD-' }],
+                optionalServices: [SERVICE_UUID]
+            });
+
+            log(`已找到裝置: ${bleDevice.name}，正在連接 GATT...`);
+            bleDevice.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+            const server = await bleDevice.gatt.connect();
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+            // 開啟 BLE Notification 推播監聽
+            try {
+                await bleCharacteristic.startNotifications();
+                bleCharacteristic.addEventListener('characteristicvaluechanged', (e) => {
+                    const value = new TextDecoder().decode(e.target.value);
+                    log(`[BLE 收到回傳]: ${value}`, 'RECV');
+                    parseStatusMessage(value);
+                });
+                log('BLE 通知機制 (Notification) 已啟用。', 'OK');
+            } catch(e) {
+                log('BLE 特徵值未開啟 Notification，改以點擊即時切換。', 'INFO');
+            }
+
+            document.getElementById('bleStatus').className = 'badge bg-success status-badge';
+            document.getElementById('bleStatus').innerText = 'BLE 已連線';
+            document.getElementById('btnConnectBLE').disabled = true;
+            document.getElementById('btnDisconnectBLE').disabled = false;
+            log('BLE 藍牙成功建立連線！', 'OK');
+
+        } catch (error) {
+            log(`BLE 連線失敗/取消: ${error}`, 'ERR');
+        }
     }
 
     function disconnectBLE() {
-      if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+        if (bleDevice && bleDevice.gatt.connected) {
+            bleDevice.gatt.disconnect();
+        }
     }
 
-    function onDisconnected() {
-      updateUI(false);
-      alert("藍芽連線已中斷！");
+    function onBleDisconnected() {
+        document.getElementById('bleStatus').className = 'badge bg-secondary status-badge';
+        document.getElementById('bleStatus').innerText = '未連線';
+        document.getElementById('btnConnectBLE').disabled = false;
+        document.getElementById('btnDisconnectBLE').disabled = true;
+        bleCharacteristic = null;
+        log('BLE 藍牙已斷開連線。', 'WARN');
     }
 
-    async function sendConfig() {
-      if (!gattCharacteristic) return;
+    // --- MQTT WebSockets 連線控制 ---
+    function toggleMQTT() {
+        if (mqttClient && mqttClient.connected) {
+            mqttClient.end();
+            return;
+        }
 
-      const configData = {
-        ssid: document.getElementById('wifiSsid').value.trim(),
-        password: document.getElementById('wifiPass').value,
-        interlock: document.getElementById('interlockCheckbox').checked,
-        channels: [
-          { duration: parseInt(document.getElementById('ch0').value) || 0 },
-          { duration: parseInt(document.getElementById('ch1').value) || 0 },
-          { duration: parseInt(document.getElementById('ch2').value) || 0 },
-          { 
-            duration: parseInt(document.getElementById('ch3').value) || 0,
-            onTime: document.getElementById('ch3OnTime').value,
-            offTime: document.getElementById('ch3OffTime').value
-          }
-        ]
-      };
+        const host = document.getElementById('mqttHost').value.trim();
+        const user = document.getElementById('mqttUser').value.trim();
+        const pass = document.getElementById('mqttPass').value.trim();
+        const cmdTopic = document.getElementById('mqttTopic').value.trim();
 
-      const payload = "CFG:" + JSON.stringify(configData);
-      const encoder = new TextEncoder();
-      
-      try {
-        await gattCharacteristic.writeValue(encoder.encode(payload));
-        alert("設定已寫入 JHZ LightDoor 並更新 JSON！");
-      } catch (error) {
-        alert("寫入失敗: " + error.message);
-      }
+        log(`嘗試連線至 MQTT WebSocket: ${host}...`);
+
+        const options = {
+            clean: true,
+            connectTimeout: 4000,
+            clientId: 'Web_' + (user ? user : Math.random().toString(16).substr(2, 8)),
+            username: user,
+            password: pass
+        };
+
+        mqttClient = mqtt.connect(host, options);
+
+        mqttClient.on('connect', () => {
+            document.getElementById('mqttStatus').className = 'badge bg-success status-badge';
+            document.getElementById('mqttStatus').innerText = 'MQTT 已連線';
+            document.getElementById('btnConnectMQTT').innerText = '中斷 MQTT';
+            document.getElementById('btnConnectMQTT').className = 'btn btn-danger w-100';
+            log('MQTT WebSocket 連線成功！', 'OK');
+
+            // 自動訂閱項目下所有狀態 Topic
+            let baseTopic = cmdTopic.includes('/') ? cmdTopic.split('/')[0] : cmdTopic;
+            let subTopic = baseTopic + '/#';
+
+            mqttClient.subscribe(subTopic, (err) => {
+                if (!err) log(`[MQTT] 已成功訂閱主題: ${subTopic}`, 'OK');
+                else log(`[MQTT] 訂閱失敗: ${err}`, 'ERR');
+            });
+        });
+
+        mqttClient.on('message', (topic, message) => {
+            const msgStr = message.toString();
+            log(`[MQTT 收到訊息 - ${topic}]: ${msgStr}`, 'RECV');
+            parseStatusMessage(msgStr);
+        });
+
+        mqttClient.on('error', (err) => log(`MQTT 錯誤: ${err}`, 'ERR'));
+
+        mqttClient.on('close', () => {
+            document.getElementById('mqttStatus').className = 'badge bg-secondary status-badge';
+            document.getElementById('mqttStatus').innerText = '未連線';
+            document.getElementById('btnConnectMQTT').innerText = '連線 MQTT';
+            document.getElementById('btnConnectMQTT').className = 'btn btn-success w-100';
+            log('MQTT 連線已關閉。', 'WARN');
+        });
     }
 
-    async function controlChannel(ch, state) {
-      if (!gattCharacteristic) return;
-      const cmd = `CMD:CH=${ch},STATE=${state ? 1 : 0}`;
-      const encoder = new TextEncoder();
-      try {
-        await gattCharacteristic.writeValue(encoder.encode(cmd));
-      } catch (error) {
-        console.error("指令發送失敗:", error);
-      }
+    // --- 高級指令輔助發送 ---
+    function sendDelay(ch) {
+        const sec = document.getElementById(`delay${ch}`).value;
+        if (sec >= 0 && sec <= 9999) sendCommand(`T${ch}-${sec}`);
     }
 
-    function updateUI(isConnected) {
-      const statusText = document.getElementById('statusText');
-      document.getElementById('connectBtn').disabled = isConnected;
-      document.getElementById('disconnectBtn').disabled = !isConnected;
-      document.getElementById('saveBtn').disabled = !isConnected;
-      document.getElementById('readBtn').disabled = !isConnected;
-
-      const testBtns = document.querySelectorAll('.testBtn');
-      testBtns.forEach(btn => btn.disabled = !isConnected);
-
-      if (isConnected) {
-        statusText.textContent = "已連線 (" + bleDevice.name + ")";
-        statusText.className = "status connected";
-      } else {
-        statusText.textContent = "未連線";
-        statusText.className = "status disconnected";
-      }
+    function setRebootTime() {
+        const timeVal = document.getElementById('rebootTime').value;
+        if (timeVal) sendCommand(`R${timeVal}`);
     }
-  </script>
+
+    function setWiFi() {
+        const ssid = document.getElementById('wifiSSID').value.trim();
+        const pass = document.getElementById('wifiPASS').value.trim();
+        if (ssid) sendCommand(`WIFI:${ssid},${pass}`);
+    }
+
+    function setEspMqttConfig() {
+        const s = document.getElementById('cfgMqttServer').value.trim();
+        const p = document.getElementById('cfgMqttPort').value.trim();
+        const u = document.getElementById('cfgMqttUser').value.trim();
+        const w = document.getElementById('cfgMqttPass').value.trim();
+        if (s && p) sendCommand(`MQTT:${s},${p},${u},${w}`);
+    }
+</script>
+
 </body>
 </html>
