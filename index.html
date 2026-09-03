@@ -38,6 +38,12 @@
             box-shadow: none;
             border-color: rgba(0,0,0,.125);
         }
+
+        /* 雙清單互鎖樣式 */
+        .interlock-select {
+            height: 120px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body class="py-4">
@@ -71,19 +77,16 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-2 mb-2">
-                        <div class="col-8">
+                        <div class="col-12">
                             <input type="text" id="mqttHost" class="form-control form-control-sm" placeholder="wss://broker.emqx.io:8084/mqtt" value="wss://y12177fb.ala.asia-southeast1.emqxsl.com:8084/mqtt">
-                        </div>
-                        <div class="col-4">
-                            <input type="text" id="mqttUser" class="form-control form-control-sm" placeholder="帳號" value="JHZGDTry001">
                         </div>
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-6">
-                            <input type="password" id="mqttPass" class="form-control form-control-sm" placeholder="密碼" value="">
+                            <input type="text" id="mqttUser" class="form-control form-control-sm" placeholder="MQTT 帳號" value="JHZGDTry001">
                         </div>
                         <div class="col-6">
-                            <input type="text" id="mqttTopic" class="form-control form-control-sm" placeholder="Topic" value="JHZGDTry001/cmd">
+                            <input type="password" id="mqttPass" class="form-control form-control-sm" placeholder="MQTT 密碼" value="">
                         </div>
                     </div>
                     <button id="btnConnectMQTT" class="btn btn-success w-100" onclick="toggleMQTT()">連線 MQTT</button>
@@ -260,37 +263,32 @@
                     </div>
                 </div>
 
-                <!-- 通道互鎖防呆 -->
+                <!-- 通道互鎖防呆 (雙清單選擇器) -->
                 <div class="mb-4">
-                    <label class="form-label fw-bold small text-primary">🔒 設定通道互鎖功能 (點擊可開關該通道互鎖)</label>
-                    <div class="row g-2 text-center">
-                        <div class="col-6 col-md-3">
-                            <div class="p-2 border rounded bg-light">
-                                <span class="d-block mb-1 small fw-bold">CH0 互鎖</span>
-                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L0-1')">開啟</button>
-                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L0-0')">關閉</button>
-                            </div>
+                    <label class="form-label fw-bold small text-primary">🔒 通道互鎖功能設定</label>
+                    <div class="row align-items-center g-2">
+                        <!-- 左側：未加入互鎖 -->
+                        <div class="col-5">
+                            <label for="uninterlockedChannels" class="form-label small fw-bold text-secondary mb-1">未加入互鎖</label>
+                            <select id="uninterlockedChannels" class="form-select form-select-sm interlock-select" multiple>
+                                <option value="0">CH0 (通道 1)</option>
+                                <option value="1">CH1 (通道 2)</option>
+                                <option value="2">CH2 (通道 3)</option>
+                                <option value="3">CH3 (通道 4)</option>
+                            </select>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="p-2 border rounded bg-light">
-                                <span class="d-block mb-1 small fw-bold">CH1 互鎖</span>
-                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L1-1')">開啟</button>
-                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L1-0')">關閉</button>
-                            </div>
+                        
+                        <!-- 中間：控制按鈕 -->
+                        <div class="col-2 d-flex flex-column gap-2 align-items-center justify-content-center">
+                            <button id="btnInterlockAdd" class="btn btn-sm btn-outline-primary w-100" onclick="moveInterlock(true)" disabled title="加入互鎖">&rarr;</button>
+                            <button id="btnInterlockRemove" class="btn btn-sm btn-outline-primary w-100" onclick="moveInterlock(false)" disabled title="移除互鎖">&larr;</button>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="p-2 border rounded bg-light">
-                                <span class="d-block mb-1 small fw-bold">CH2 互鎖</span>
-                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L2-1')">開啟</button>
-                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L2-0')">關閉</button>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="p-2 border rounded bg-light">
-                                <span class="d-block mb-1 small fw-bold">CH3 互鎖</span>
-                                <button class="btn btn-sm btn-success w-50" onclick="sendCommand('L3-1')">開啟</button>
-                                <button class="btn btn-sm btn-secondary w-40" onclick="sendCommand('L3-0')">關閉</button>
-                            </div>
+
+                        <!-- 右側：已加入互鎖 -->
+                        <div class="col-5">
+                            <label for="interlockedChannels" class="form-label small fw-bold text-success mb-1">已加入互鎖</label>
+                            <select id="interlockedChannels" class="form-select form-select-sm interlock-select" multiple>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -364,6 +362,11 @@
     // 通道狀態追蹤陣列 (false: 關閉, true: 開啟)
     let relayStates = [false, false, false, false];
 
+    // --- 在線狀態偵測 (Heartbeat / Ping) 變數 ---
+    let espPingTimer = null;
+    let espPingFailCount = 0;
+    const MAX_PING_FAILURES = 3;
+
     // --- 日誌工具 ---
     function log(msg, type = 'INFO') {
         const logBox = document.getElementById('logBox');
@@ -384,23 +387,21 @@
         if (isOn) {
             btn.className = "btn btn-black-on w-100 py-2";
             btn.innerText = "開啟";
-            btn.style.color = "#198754";      // 亮綠字
+            btn.style.color = "#198754";
             btn.style.borderColor = "#198754";
         } else {
             btn.className = "btn btn-black-off w-100 py-2";
             btn.innerText = "關閉";
-            btn.style.color = "#dc3545";      // 亮紅字
+            btn.style.color = "#dc3545";
             btn.style.borderColor = "#dc3545";
         }
     }
 
     // --- 單一按鈕點擊：翻轉 UI 並發送指令 ---
     function toggleSingleRelay(ch) {
-        // 翻轉狀態並更新 UI
         relayStates[ch] = !relayStates[ch]; 
         updateRelayButtonUI(ch, relayStates[ch]); 
         
-        // 發送指令 (如 0-1 或 0-0)
         const stateVal = relayStates[ch] ? 1 : 0;
         sendCommand(`${ch}-${stateVal}`); 
     }
@@ -415,15 +416,100 @@
         sendCommand(state === 1 ? '+1' : '+0');
     }
 
-    // --- 解析來自 ESP32 回傳的狀態訊息 (支援 JSON 與 指令字串) ---
+    // --- 通道互鎖雙清單邏輯與 DOM 操作 ---
+    const uninterlockedSelect = document.getElementById('uninterlockedChannels');
+    const interlockedSelect = document.getElementById('interlockedChannels');
+    const btnInterlockAdd = document.getElementById('btnInterlockAdd');
+    const btnInterlockRemove = document.getElementById('btnInterlockRemove');
+
+    function updateInterlockButtonStates() {
+        btnInterlockAdd.disabled = uninterlockedSelect.selectedOptions.length === 0;
+        btnInterlockRemove.disabled = interlockedSelect.selectedOptions.length === 0;
+    }
+
+    function moveInterlock(toLocked) {
+        const sourceSelect = toLocked ? uninterlockedSelect : interlockedSelect;
+        const targetSelect = toLocked ? interlockedSelect : uninterlockedSelect;
+        const selectedOptions = Array.from(sourceSelect.selectedOptions);
+
+        selectedOptions.forEach(option => {
+            const ch = option.value;
+            option.selected = false;
+            targetSelect.appendChild(option);
+
+            // 送出對應互鎖指令: L{ch}-1 表示開啟互鎖，L{ch}-0 表示關閉互鎖
+            const cmd = `L${ch}-${toLocked ? 1 : 0}`;
+            sendCommand(cmd);
+        });
+
+        sortSelectOptions(targetSelect);
+        updateInterlockButtonStates();
+    }
+
+    function sortSelectOptions(selectElem) {
+        const options = Array.from(selectElem.options);
+        options.sort((a, b) => parseInt(a.value, 10) - parseInt(b.value, 10));
+        selectElem.innerHTML = '';
+        options.forEach(opt => selectElem.appendChild(opt));
+    }
+
+    uninterlockedSelect.addEventListener('change', updateInterlockButtonStates);
+    interlockedSelect.addEventListener('change', updateInterlockButtonStates);
+    uninterlockedSelect.addEventListener('dblclick', () => moveInterlock(true));
+    interlockedSelect.addEventListener('dblclick', () => moveInterlock(false));
+
+    // --- 在線狀態 Ping 控制邏輯 ---
+    function checkEspOnline() {
+        // 清除上一次的計時器
+        if (espPingTimer) clearTimeout(espPingTimer);
+
+        espPingFailCount++;
+        log(`[MQTT 探測] 正在確認 ESP32 是否在線上 (第 ${espPingFailCount}/${MAX_PING_FAILURES} 次測試)...`, 'WARN');
+
+        if (espPingFailCount > MAX_PING_FAILURES) {
+            log(`[MQTT 探測失敗] 連續 ${MAX_PING_FAILURES} 次發送請求皆無回應，ESP32 確定離線！`, 'ERR');
+            alert(`⚠️ ESP32 裝置未回應！\n\n已連續 3 次無法取得 ESP32 狀態，系統將自動中斷 MQTT 連線。`);
+            
+            // 重置失敗計數器並自動中斷 MQTT 連線
+            espPingFailCount = 0;
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.end();
+            }
+            return;
+        }
+
+        // 發送狀態查詢指令
+        sendCommand('GET_CONFIG');
+
+        // 設定 5 秒超時倒數，若 5 秒內沒有回應將會再次執行 checkEspOnline
+        espPingTimer = setTimeout(() => {
+            checkEspOnline();
+        }, 5000);
+    }
+
+    function resetEspPingStatus() {
+        if (espPingTimer) {
+            clearTimeout(espPingTimer);
+            espPingTimer = null;
+        }
+        if (espPingFailCount > 0) {
+            log('【系統提示】收到 ESP32 狀態回應，確認裝置在線上！', 'OK');
+        }
+        espPingFailCount = 0;
+    }
+
+    // --- 解析來自 ESP32 回傳的狀態與設定 JSON 封包 ---
     function parseStatusMessage(dataStr) {
         if (!dataStr) return;
         dataStr = dataStr.trim();
 
-        // 情況 A：JSON 格式 (如 {"relays":[1,0,0,0]})
         if (dataStr.startsWith('{')) {
+            // 成功收到 ESP32 的有效回應，重置離線測試計數
+            resetEspPingStatus();
+
             try {
                 const data = JSON.parse(dataStr);
+
                 if (data && Array.isArray(data.relays)) {
                     data.relays.forEach((state, ch) => {
                         if (ch < 4) {
@@ -431,14 +517,62 @@
                             updateRelayButtonUI(ch, relayStates[ch]);
                         }
                     });
-                    return;
                 }
+
+                if (data.mqtt) {
+                    if (data.mqtt.server) document.getElementById('cfgMqttServer').value = data.mqtt.server;
+                    if (data.mqtt.port)   document.getElementById('cfgMqttPort').value   = data.mqtt.port;
+                    if (data.mqtt.user)   document.getElementById('cfgMqttUser').value   = data.mqtt.user;
+                }
+
+                if (data.reboot !== undefined) {
+                    document.getElementById('rebootTime').value = data.reboot;
+                }
+
+                if (Array.isArray(data.delays)) {
+                    data.delays.forEach((sec, ch) => {
+                        if (ch < 4) document.getElementById(`delay${ch}`).value = sec;
+                    });
+                }
+
+                if (Array.isArray(data.onTimes)) {
+                    data.onTimes.forEach((time, ch) => {
+                        if (ch < 4) document.getElementById(`ch${ch}OnTime`).value = time;
+                    });
+                }
+                if (Array.isArray(data.offTimes)) {
+                    data.offTimes.forEach((time, ch) => {
+                        if (ch < 4) document.getElementById(`ch${ch}OffTime`).value = time;
+                    });
+                }
+
+                if (Array.isArray(data.interlocks)) {
+                    data.interlocks.forEach((status, ch) => {
+                        if (ch < 4) {
+                            const option = uninterlockedSelect.querySelector(`option[value="${ch}"]`) || 
+                                           interlockedSelect.querySelector(`option[value="${ch}"]`);
+                            if (option) {
+                                if (status === 1 || status === true) {
+                                    interlockedSelect.appendChild(option);
+                                } else {
+                                    uninterlockedSelect.appendChild(option);
+                                }
+                            }
+                        }
+                    });
+                    sortSelectOptions(uninterlockedSelect);
+                    sortSelectOptions(interlockedSelect);
+                    updateInterlockButtonStates();
+                }
+
+                log("【系統提示】已自動將 ESP32 上的已存設定資訊帶入 HTML！", "OK");
+                return;
+
             } catch (e) {
                 console.error("JSON 解析錯誤:", e);
             }
         }
 
-        // 情況 B：單通道回傳格式 (如 "0-1", "0-0", "CH0:1")
         if (dataStr.includes('-')) {
             const parts = dataStr.split('-');
             const ch = parseInt(parts[0], 10);
@@ -461,9 +595,12 @@
                 .catch(err => log(`[BLE] 發送失敗: ${err}`, 'ERR'));
         } 
         else if (mqttClient && mqttClient.connected) {
-            const topic = document.getElementById('mqttTopic').value.trim();
-            mqttClient.publish(topic, cmdStr, { qos: 0 }, (err) => {
-                if (!err) log(`[MQTT] 已發布至 ${topic}: ${cmdStr}`, 'OK');
+            // 動態以「MQTT 帳號/cmd」作為指令發布主題
+            const user = document.getElementById('mqttUser').value.trim();
+            const pubTopic = `${user}/cmd`;
+
+            mqttClient.publish(pubTopic, cmdStr, { qos: 0 }, (err) => {
+                if (!err) log(`[MQTT] 已發布至 ${pubTopic}: ${cmdStr}`, 'OK');
                 else log(`[MQTT] 發布失敗: ${err}`, 'ERR');
             });
         } 
@@ -489,7 +626,6 @@
             const service = await server.getPrimaryService(SERVICE_UUID);
             bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-            // 開啟 BLE Notification 推播監聽
             try {
                 await bleCharacteristic.startNotifications();
                 bleCharacteristic.addEventListener('characteristicvaluechanged', (e) => {
@@ -507,6 +643,10 @@
             document.getElementById('btnConnectBLE').disabled = true;
             document.getElementById('btnDisconnectBLE').disabled = false;
             log('BLE 藍牙成功建立連線！', 'OK');
+
+            setTimeout(() => {
+                sendCommand('GET_CONFIG');
+            }, 500);
 
         } catch (error) {
             log(`BLE 連線失敗/取消: ${error}`, 'ERR');
@@ -538,14 +678,18 @@
         const host = document.getElementById('mqttHost').value.trim();
         const user = document.getElementById('mqttUser').value.trim();
         const pass = document.getElementById('mqttPass').value.trim();
-        const cmdTopic = document.getElementById('mqttTopic').value.trim();
+
+        if (!user) {
+            alert('請先輸入 MQTT 帳號！');
+            return;
+        }
 
         log(`嘗試連線至 MQTT WebSocket: ${host}...`);
 
         const options = {
             clean: true,
             connectTimeout: 4000,
-            clientId: 'Web_' + (user ? user : Math.random().toString(16).substr(2, 8)),
+            clientId: 'Web_' + user + '_' + Math.random().toString(16).substr(2, 4),
             username: user,
             password: pass
         };
@@ -559,13 +703,19 @@
             document.getElementById('btnConnectMQTT').className = 'btn btn-danger w-100';
             log('MQTT WebSocket 連線成功！', 'OK');
 
-            // 自動訂閱廣義與狀態 Topic (例如: "JHZGDTry001/#")
-            let baseTopic = cmdTopic.includes('/') ? cmdTopic.split('/')[0] : cmdTopic;
-            let subTopic = baseTopic + '/#';
+            // 自動強制訂閱: 使用者名稱/#
+            const subTopic = `${user}/#`;
 
             mqttClient.subscribe(subTopic, (err) => {
-                if (!err) log(`[MQTT] 已成功訂閱主題: ${subTopic}`, 'OK');
-                else log(`[MQTT] 訂閱失敗: ${err}`, 'ERR');
+                if (!err) {
+                    log(`[MQTT] 已成功訂閱主題: ${subTopic}`, 'OK');
+                    
+                    // 連線成功後開始發送在線檢測（重置失敗計數並開啟 5 秒輪詢測試）
+                    espPingFailCount = 0;
+                    checkEspOnline();
+                } else {
+                    log(`[MQTT] 訂閱失敗: ${err}`, 'ERR');
+                }
             });
         });
 
@@ -578,6 +728,7 @@
         mqttClient.on('error', (err) => log(`MQTT 錯誤: ${err}`, 'ERR'));
 
         mqttClient.on('close', () => {
+            resetEspPingStatus(); // 關閉連線時清除測試計時器與狀態
             document.getElementById('mqttStatus').className = 'badge bg-secondary status-badge';
             document.getElementById('mqttStatus').innerText = '未連線';
             document.getElementById('btnConnectMQTT').innerText = '連線 MQTT';
@@ -591,7 +742,6 @@
         const inputId = type === 'ON' ? `ch${ch}OnTime` : `ch${ch}OffTime`;
         const timeVal = document.getElementById(inputId).value;
         if (timeVal) {
-            // 發送指令格式：ON_TIME:0,08:00 或 OFF_TIME:0,18:00
             sendCommand(`${type}_TIME:${ch},${timeVal}`);
         } else {
             alert(`請先選擇 CH${ch} 的${type === 'ON' ? '開機' : '關機'}時間！`);
@@ -601,7 +751,6 @@
     function clearChannelSchedule(ch) {
         document.getElementById(`ch${ch}OnTime`).value = '';
         document.getElementById(`ch${ch}OffTime`).value = '';
-        // 發送清空指令：CLR_TIME:0
         sendCommand(`CLR_TIME:${ch}`);
     }
 
