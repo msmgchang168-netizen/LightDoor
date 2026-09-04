@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 智慧控制面板 (BLE / MQTT)</title>
+    <title>JHZ GarageDoor 智慧控制面板 (BLE / MQTT)</title>
     <!-- 引入 Bootstrap 5 UI 框架 與 MQTT.js -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -13,7 +13,6 @@
         .card { border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: none; margin-bottom: 20px; overflow: hidden; }
         .card-header { background-color: #fff; border-bottom: 1px solid #edf2f7; font-weight: bold; }
         .status-badge { font-size: 0.85rem; padding: 6px 12px; border-radius: 20px; }
-        .log-box { background: #1e1e1e; color: #4ec9b0; font-family: monospace; height: 180px; overflow-y: auto; padding: 10px; border-radius: 8px; font-size: 0.85rem; }
         
         /* 黑底按鈕自訂樣式 */
         .btn-black-off {
@@ -44,12 +43,43 @@
             height: 120px;
             font-size: 0.9rem;
         }
+
+        /* 強化日誌區塊樣式 */
+        .log-box { 
+            background: #1e1e1e; 
+            color: #d4d4d4; 
+            font-family: 'Consolas', 'Courier New', monospace; 
+            height: 250px; 
+            overflow-y: auto; 
+            padding: 12px; 
+            border-radius: 8px; 
+            font-size: 0.85rem; 
+            line-height: 1.5;
+        }
+        .log-item { margin-bottom: 4px; word-break: break-all; }
+        .log-time { color: #858585; margin-right: 6px; }
+        .log-tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 6px; display: inline-block; }
+        
+        /* 日誌層級顏色 */
+        .log-tag-INFO { background-color: #0d6efd; color: #fff; }
+        .log-tag-SEND { background-color: #0dcaf0; color: #000; }
+        .log-tag-RECV { background-color: #6f42c1; color: #fff; }
+        .log-tag-OK   { background-color: #198754; color: #fff; }
+        .log-tag-WARN { background-color: #ffc107; color: #000; }
+        .log-tag-ERR  { background-color: #dc3545; color: #fff; }
+        
+        .log-msg-INFO { color: #9cdcfe; }
+        .log-msg-SEND { color: #4ec9b0; }
+        .log-msg-RECV { color: #c586c0; }
+        .log-msg-OK   { color: #b5cea8; }
+        .log-msg-WARN { color: #ce9178; }
+        .log-msg-ERR  { color: #f44747; font-weight: bold; }
     </style>
 </head>
 <body class="py-4">
 
 <div class="container" style="max-width: 950px;">
-    <h3 class="mb-4 text-center fw-bold text-primary">ESP32 智慧繼電器控制面板</h3>
+    <h3 class="mb-4 text-center fw-bold text-primary">JHZ GarageDoor 智慧繼電器控制面板</h3>
 
     <!-- 1. 連線通道設定 (BLE / MQTT) -->
     <div class="row">
@@ -61,7 +91,7 @@
                     <span id="bleStatus" class="badge bg-secondary status-badge">未連線</span>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">請使用 Chrome / Edge 瀏覽器，開啟藍牙搜尋 ESP32 裝置。</p>
+                    <p class="text-muted small">請使用 Chrome / Edge 瀏覽器，開啟藍牙搜尋 JHZ GarageDoor 裝置。</p>
                     <button id="btnConnectBLE" class="btn btn-primary w-100 mb-2" onclick="connectBLE()">搜尋並連線 BLE</button>
                     <button id="btnDisconnectBLE" class="btn btn-outline-danger w-100" onclick="disconnectBLE()" disabled>中斷 BLE 連線</button>
                 </div>
@@ -109,28 +139,24 @@
         <div id="collapseRelay" class="collapse show">
             <div class="card-body">
                 <div class="row text-center g-3">
-                    <!-- 通道 0 -->
                     <div class="col-6 col-md-3">
                         <div class="p-3 border rounded bg-light">
                             <h6 class="fw-bold">通道 0 (CH1)</h6>
                             <button id="btnRelay0" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(0)">關閉</button>
                         </div>
                     </div>
-                    <!-- 通道 1 -->
                     <div class="col-6 col-md-3">
                         <div class="p-3 border rounded bg-light">
                             <h6 class="fw-bold">通道 1 (CH2)</h6>
                             <button id="btnRelay1" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(1)">關閉</button>
                         </div>
                     </div>
-                    <!-- 通道 2 -->
                     <div class="col-6 col-md-3">
                         <div class="p-3 border rounded bg-light">
                             <h6 class="fw-bold">通道 2 (CH3)</h6>
                             <button id="btnRelay2" class="btn btn-black-off w-100 py-2" onclick="toggleSingleRelay(2)">關閉</button>
                         </div>
                     </div>
-                    <!-- 通道 3 -->
                     <div class="col-6 col-md-3">
                         <div class="p-3 border rounded bg-light">
                             <h6 class="fw-bold">通道 3 (CH4)</h6>
@@ -151,11 +177,10 @@
         </div>
         <div id="collapseParams" class="collapse">
             <div class="card-body">
-                <!-- 每日定時開關機設定 (依通道) -->
+                <!-- 每日定時開關機設定 -->
                 <div class="mb-4">
                     <label class="form-label fw-bold small text-primary">📅 通道每日定時開機 / 關機設定</label>
                     <div class="row g-3">
-                        <!-- CH0 -->
                         <div class="col-md-6">
                             <div class="p-2 border rounded bg-light">
                                 <span class="fw-bold small d-block mb-1">通道 0 (CH1)</span>
@@ -172,7 +197,6 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- CH1 -->
                         <div class="col-md-6">
                             <div class="p-2 border rounded bg-light">
                                 <span class="fw-bold small d-block mb-1">通道 1 (CH2)</span>
@@ -189,7 +213,6 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- CH2 -->
                         <div class="col-md-6">
                             <div class="p-2 border rounded bg-light">
                                 <span class="fw-bold small d-block mb-1">通道 2 (CH3)</span>
@@ -206,7 +229,6 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- CH3 -->
                         <div class="col-md-6">
                             <div class="p-2 border rounded bg-light">
                                 <span class="fw-bold small d-block mb-1">通道 3 (CH4)</span>
@@ -263,11 +285,10 @@
                     </div>
                 </div>
 
-                <!-- 通道互鎖防呆 (雙清單選擇器) -->
+                <!-- 通道互鎖防呆 -->
                 <div class="mb-4">
                     <label class="form-label fw-bold small text-primary">🔒 通道互鎖功能設定</label>
                     <div class="row align-items-center g-2">
-                        <!-- 左側：未加入互鎖 -->
                         <div class="col-5">
                             <label for="uninterlockedChannels" class="form-label small fw-bold text-secondary mb-1">未加入互鎖</label>
                             <select id="uninterlockedChannels" class="form-select form-select-sm interlock-select" multiple>
@@ -277,14 +298,10 @@
                                 <option value="3">CH3 (通道 4)</option>
                             </select>
                         </div>
-                        
-                        <!-- 中間：控制按鈕 -->
                         <div class="col-2 d-flex flex-column gap-2 align-items-center justify-content-center">
                             <button id="btnInterlockAdd" class="btn btn-sm btn-outline-primary w-100" onclick="moveInterlock(true)" disabled title="加入互鎖">&rarr;</button>
                             <button id="btnInterlockRemove" class="btn btn-sm btn-outline-primary w-100" onclick="moveInterlock(false)" disabled title="移除互鎖">&larr;</button>
                         </div>
-
-                        <!-- 右側：已加入互鎖 -->
                         <div class="col-5">
                             <label for="interlockedChannels" class="form-label small fw-bold text-success mb-1">已加入互鎖</label>
                             <select id="interlockedChannels" class="form-select form-select-sm interlock-select" multiple>
@@ -317,35 +334,102 @@
 
                 <hr>
 
-                <!-- 遠端更新 ESP32 內部的 MQTT 參數 -->
-                <label class="form-label fw-bold small text-primary">☁️ 一鍵遠端設定 ESP32 內部的 MQTT Broker 帳密</label>
-                <div class="row g-2">
-                    <div class="col-md-4">
-                        <input type="text" id="cfgMqttServer" class="form-control form-control-sm" placeholder="Server 網址" value="y12177fb.ala.asia-southeast1.emqxsl.com">
+                <!-- 遠端更新 JHZ GarageDoor 內部 MQTT 參數 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-primary">☁️ 一鍵遠端設定 JHZ GarageDoor 內部的 MQTT Broker 帳密</label>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <input type="text" id="cfgMqttServer" class="form-control form-control-sm" placeholder="Server 網址" value="y12177fb.ala.asia-southeast1.emqxsl.com">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" id="cfgMqttPort" class="form-control form-control-sm" placeholder="Port" value="8883">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" id="cfgMqttUser" class="form-control form-control-sm" placeholder="MQTT 帳號" value="JHZGDTry001">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="password" id="cfgMqttPass" class="form-control form-control-sm" placeholder="MQTT 密碼">
+                        </div>
                     </div>
-                    <div class="col-md-2">
-                        <input type="number" id="cfgMqttPort" class="form-control form-control-sm" placeholder="Port" value="8883">
-                    </div>
-                    <div class="col-md-3">
-                        <input type="text" id="cfgMqttUser" class="form-control form-control-sm" placeholder="MQTT 帳號" value="JHZGDTry001">
-                    </div>
-                    <div class="col-md-3">
-                        <input type="password" id="cfgMqttPass" class="form-control form-control-sm" placeholder="MQTT 密碼">
-                    </div>
+                    <button class="btn btn-sm btn-primary mt-2 w-100" onclick="setEspMqttConfig()">寫入 MQTT 參數至 JHZ GarageDoor NVS Flash</button>
                 </div>
-                <button class="btn btn-sm btn-primary mt-2 w-100" onclick="setEspMqttConfig()">寫入 MQTT 參數至 ESP32 NVS Flash</button>
+
+                <hr>
+
+                <!-- 危險維護專區：清空內部 Flash 歷史紀錄 -->
+                <div class="p-3 border border-danger rounded bg-light">
+                    <label class="form-label fw-bold small text-danger">⚠️ 系統數據清理 (高風險操作)</label>
+                    <p class="text-muted small mb-2">發送指令清空 JHZ GarageDoor 內部 Flash (LittleFS) 儲存的所有歷史記錄檔案，此操作無法復原。</p>
+                    <button class="btn btn-sm btn-danger w-100 fw-bold" onclick="clearEspLogs()">🗑️ 清空 JHZ GarageDoor Flash 歷史紀錄</button>
+                </div>
+
             </div>
         </div>
     </div>
 
-    <!-- 4. 訊息數據日誌 -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>📋 傳輸數據日誌 (Log)</span>
-            <button class="btn btn-sm btn-link text-decoration-none" onclick="clearLog()">清空 Log</button>
+    <!-- 4. JHZ GarageDoor Flash (LittleFS) 歷史操作紀錄管理 (可收摺) -->
+    <div class="card border-primary">
+        <div class="card-header p-0 bg-primary">
+            <button class="accordion-button collapsed fw-bold py-3 px-3 text-white bg-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEspLogs" aria-expanded="false" aria-controls="collapseEspLogs">
+                💾 JHZ GarageDoor 內部歷史紀錄
+            </button>
         </div>
-        <div class="card-body p-2">
-            <div id="logBox" class="log-box">-- 系統初始化完成，等待連線... --<br></div>
+        <div id="collapseEspLogs" class="collapse">
+            <div class="card-body p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                    <span class="text-muted small">可依月份選擇或選擇「全部月份」向 JHZ GarageDoor 讀取歷史紀錄，亦支援匯出檔案備份。</span>
+                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <select id="espLogMonthSelect" class="form-select form-select-sm" style="width: auto;">
+                            <option value="ALL">全部月份</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary fw-bold" onclick="fetchEspLogs()">📥 讀取紀錄</button>
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="exportEspLogs('csv')">💾 匯出 CSV</button>
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="exportEspLogs('json')">💾 匯出 JSON</button>
+                    </div>
+                </div>
+                <div id="espLogContainer" class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                    <div class="text-center text-muted py-4">尚未讀取紀錄</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 訊息數據日誌 (全功能升級版, 可收摺) -->
+    <div class="card">
+        <div class="card-header p-0">
+            <button class="accordion-button collapsed fw-bold py-3 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSystemLogs" aria-expanded="false" aria-controls="collapseSystemLogs">
+                📋 即時傳輸數據日誌 (Log)
+            </button>
+        </div>
+        <div id="collapseSystemLogs" class="collapse">
+            <div class="card-body p-2">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2 p-1">
+                    <span class="text-muted small">即時指令傳輸與數據回傳記錄</span>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <select id="logFilter" class="form-select form-select-sm" style="width: auto;" onchange="filterLogs()">
+                            <option value="ALL">全部類別</option>
+                            <option value="INFO">INFO (資訊)</option>
+                            <option value="SEND">SEND (發送)</option>
+                            <option value="RECV">RECV (接收)</option>
+                            <option value="OK">OK (成功)</option>
+                            <option value="WARN">WARN (警告)</option>
+                            <option value="ERR">ERR (錯誤)</option>
+                        </select>
+
+                        <div class="form-check form-switch mb-0 small me-1">
+                            <input class="form-check-input" type="checkbox" id="autoScrollCheck" checked>
+                            <label class="form-check-label" for="autoScrollCheck">自動捲動</label>
+                        </div>
+
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="copyLog()" title="複製至剪貼簿">複製</button>
+                            <button class="btn btn-outline-secondary" onclick="exportLog()" title="匯出為文字檔">下載</button>
+                            <button class="btn btn-outline-danger" onclick="clearLog()" title="清空面板與記憶體紀錄">清空</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="logBox" class="log-box"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -359,6 +443,10 @@
     let bleCharacteristic = null;
     let mqttClient = null;
 
+    // 針對 BLE 分段傳輸建立之緩衝區 (Buffer) 與逾時控制
+    let bleRxBuffer = "";
+    let bleRxTimeout = null;
+
     // 通道狀態追蹤陣列 (false: 關閉, true: 開啟)
     let relayStates = [false, false, false, false];
 
@@ -367,16 +455,237 @@
     let espPingFailCount = 0;
     const MAX_PING_FAILURES = 3;
 
-    // --- 日誌工具 ---
+    // --- 日誌數據陣列紀錄 (全功能日誌系統) ---
+    const logHistory = [];
+    
+    // --- 儲存最近一次從 JHZ GarageDoor 讀取到的歷史紀錄陣列，方便匯出檔案 ---
+    let currentFetchedEspLogs = [];
+
+    // 頁面加載完成時初始化
+    window.addEventListener('DOMContentLoaded', () => {
+        log('系統初始化完成，等待連線...', 'INFO');
+        initMonthOptions();
+    });
+
+    // 動態產生近 12 個月的選項清單
+    function initMonthOptions() {
+        const select = document.getElementById('espLogMonthSelect');
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const val = `${yyyy}-${mm}`;
+            
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.innerText = `${val}月`;
+            select.appendChild(opt);
+        }
+    }
+
+    /**
+     * 發送全功能日誌
+     * @param {string} msg 日誌訊息
+     * @param {string} type 類型 (INFO / SEND / RECV / OK / WARN / ERR)
+     */
     function log(msg, type = 'INFO') {
-        const logBox = document.getElementById('logBox');
         const time = new Date().toLocaleTimeString();
-        logBox.innerHTML += `[${time}] [${type}] ${msg}<br>`;
-        logBox.scrollTop = logBox.scrollHeight;
+        const logEntry = { time, type, msg };
+        
+        logHistory.push(logEntry);
+
+        const currentFilter = document.getElementById('logFilter').value;
+        if (currentFilter === 'ALL' || currentFilter === type) {
+            renderLogItem(logEntry);
+        }
+    }
+
+    // 渲染單條 Log 到 DOM
+    function renderLogItem(entry) {
+        const logBox = document.getElementById('logBox');
+        const item = document.createElement('div');
+        item.className = `log-item log-filter-${entry.type}`;
+        item.innerHTML = `<span class="log-time">[${entry.time}]</span><span class="log-tag log-tag-${entry.type}">${entry.type}</span><span class="log-msg-${entry.type}">${escapeHtml(entry.msg)}</span>`;
+        logBox.appendChild(item);
+
+        if (document.getElementById('autoScrollCheck').checked) {
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function filterLogs() {
+        const filter = document.getElementById('logFilter').value;
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML = '';
+
+        logHistory.forEach(entry => {
+            if (filter === 'ALL' || entry.type === filter) {
+                renderLogItem(entry);
+            }
+        });
     }
 
     function clearLog() {
+        logHistory.length = 0;
         document.getElementById('logBox').innerHTML = '';
+    }
+
+    function copyLog() {
+        if (logHistory.length === 0) {
+            alert('目前尚無任何日誌可供複製！');
+            return;
+        }
+        const textToCopy = logHistory.map(e => `[${e.time}] [${e.type}] ${e.msg}`).join('\n');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            alert('已成功複製 Log 至剪貼簿！');
+        }).catch(err => {
+            alert('複製失敗: ' + err);
+        });
+    }
+
+    function exportLog() {
+        if (logHistory.length === 0) {
+            alert('目前尚無任何日誌可供下載！');
+            return;
+        }
+        const textToExport = logHistory.map(e => `[${e.time}] [${e.type}] ${e.msg}`).join('\n');
+        const blob = new Blob([textToExport], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        a.href = url;
+        a.download = `ESP32_Control_Log_${timestamp}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // --- 讀取、清空與匯出 JHZ GarageDoor 內部歷史紀錄控制 ---
+    function fetchEspLogs() {
+        const monthVal = document.getElementById('espLogMonthSelect').value;
+        document.getElementById('espLogContainer').innerHTML = `<div class="text-center text-primary py-4"><span class="spinner-border spinner-border-sm me-2"></span>正在向 JHZ GarageDoor 請求歷史紀錄 (${monthVal})...</div>`;
+        
+        bleRxBuffer = ""; // 發送前清空 BLE 分段暫存區
+        
+        if (monthVal === 'ALL') {
+            sendCommand('GET_LOG');
+        } else {
+            sendCommand(`GET_LOG:${monthVal}`);
+        }
+    }
+
+    function clearEspLogs() {
+        if (confirm('確定要清空 JHZ GarageDoor Flash 內部記錄的所有歷史日誌嗎？此操作不可逆！')) {
+            sendCommand('CLR_LOG');
+            // 清空 UI 暫存
+            currentFetchedEspLogs = [];
+            document.getElementById('espLogContainer').innerHTML = '<div class="text-center text-success py-4">已發送清空指令，正在重新載入...</div>';
+        
+            // 延遲 1.5 秒等 ESP32 檔案系統處理完成後自動重新讀取
+            setTimeout(() => {
+                fetchEspLogs();
+            }, 1500);
+        }
+    }
+
+    // 匯出 JHZ GarageDoor 歷史紀錄功能 (支援 CSV 與 JSON)
+    function exportEspLogs(format = 'csv') {
+        if (!currentFetchedEspLogs || currentFetchedEspLogs.length === 0) {
+            alert('目前尚無可匯出的 JHZ GarageDoor 歷史紀錄，請先點擊「讀取紀錄」！');
+            return;
+        }
+
+        const selectedMonth = document.getElementById('espLogMonthSelect').value;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        let content = '';
+        let mimeType = '';
+        let fileName = `ESP32_History_${selectedMonth}_${timestamp}`;
+
+        if (format === 'csv') {
+            // 加入 UTF-8 BOM，防止 Excel 開啟出現簡體或亂碼
+            content = '\uFEFF時間,來源/使用者,操作動作\n';
+            currentFetchedEspLogs.forEach(item => {
+                const t = `"${(item.time || '').replace(/"/g, '""')}"`;
+                const u = `"${(item.user || '').replace(/"/g, '""')}"`;
+                const a = `"${(item.action || '').replace(/"/g, '""')}"`;
+                content += `${t},${u},${a}\n`;
+            });
+            mimeType = 'text/csv;charset=utf-8;';
+            fileName += '.csv';
+        } else if (format === 'json') {
+            content = JSON.stringify(currentFetchedEspLogs, null, 2);
+            mimeType = 'application/json;charset=utf-8;';
+            fileName += '.json';
+        }
+
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log(`已成功匯出 JHZ GarageDoor 歷史紀錄檔案: ${fileName}`, 'OK');
+    }
+
+    function renderEspLogsTable(logsArray) {
+        currentFetchedEspLogs = logsArray; // 保存至暫存變數供匯出使用
+        const container = document.getElementById('espLogContainer');
+        if (!Array.isArray(logsArray) || logsArray.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">JHZ GarageDoor 內部目前無任何紀錄</div>';
+            return;
+        }
+
+        let html = `
+            <table class="table table-sm table-striped table-hover text-center align-middle mb-0" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 30%;">時間</th>
+                        <th style="width: 30%;">來源 / 使用者</th>
+                        <th style="width: 40%;">操作動作</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // 倒序顯示，最新日誌呈現於最上方
+        for (let i = logsArray.length - 1; i >= 0; i--) {
+            const item = logsArray[i];
+            const timeStr = item.time || '未知時間';
+            const userStr = item.user || 'System';
+            const actionStr = item.action || '無說明';
+
+            let actionBadgeClass = 'bg-secondary';
+            if (actionStr.includes('ON')) actionBadgeClass = 'bg-success';
+            else if (actionStr.includes('OFF')) actionBadgeClass = 'bg-danger';
+            else if (actionStr.includes('Boot') || actionStr.includes('Reset') || actionStr.includes('RST')) actionBadgeClass = 'bg-warning text-dark';
+
+            html += `
+                <tr>
+                    <td class="text-secondary">${escapeHtml(timeStr)}</td>
+                    <td><span class="badge bg-outline-dark text-dark border">${escapeHtml(userStr)}</span></td>
+                    <td><span class="badge ${actionBadgeClass}">${escapeHtml(actionStr)}</span></td>
+                </tr>
+            `;
+        }
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
     }
 
     // --- 核心：即時強制更新按鈕 UI 樣式與文字 ---
@@ -397,7 +706,6 @@
         }
     }
 
-    // --- 單一按鈕點擊：翻轉 UI 並發送指令 ---
     function toggleSingleRelay(ch) {
         relayStates[ch] = !relayStates[ch]; 
         updateRelayButtonUI(ch, relayStates[ch]); 
@@ -406,7 +714,6 @@
         sendCommand(`${ch}-${stateVal}`); 
     }
 
-    // --- 全開 / 全關 控制 ---
     function setAllRelays(state) {
         const targetState = (state === 1);
         for (let i = 0; i < 4; i++) {
@@ -437,7 +744,6 @@
             option.selected = false;
             targetSelect.appendChild(option);
 
-            // 送出對應互鎖指令: L{ch}-1 表示開啟互鎖，L{ch}-0 表示關閉互鎖
             const cmd = `L${ch}-${toLocked ? 1 : 0}`;
             sendCommand(cmd);
         });
@@ -460,17 +766,15 @@
 
     // --- 在線狀態 Ping 控制邏輯 ---
     function checkEspOnline() {
-        // 清除上一次的計時器
         if (espPingTimer) clearTimeout(espPingTimer);
 
         espPingFailCount++;
-        log(`[MQTT 探測] 正在確認 ESP32 是否在線上 (第 ${espPingFailCount}/${MAX_PING_FAILURES} 次測試)...`, 'WARN');
+        log(`[MQTT 探測] 正在確認 JHZ GarageDoor 是否在線上 (第 ${espPingFailCount}/${MAX_PING_FAILURES} 次測試)...`, 'WARN');
 
         if (espPingFailCount > MAX_PING_FAILURES) {
-            log(`[MQTT 探測失敗] 連續 ${MAX_PING_FAILURES} 次發送請求皆無回應，ESP32 確定離線！`, 'ERR');
-            alert(`⚠️ ESP32 裝置未回應！\n\n已連續 3 次無法取得 ESP32 狀態，系統將自動中斷 MQTT 連線。`);
+            log(`[MQTT 探測失敗] 連續 ${MAX_PING_FAILURES} 次發送請求皆無回應，JHZ GarageDoor 確定離線！`, 'ERR');
+            alert(`⚠️ JHZ GarageDoor 裝置未回應！\n\n已連續 3 次無法取得 JHZ GarageDoor 狀態，系統將自動中斷 MQTT 連線。`);
             
-            // 重置失敗計數器並自動中斷 MQTT 連線
             espPingFailCount = 0;
             if (mqttClient && mqttClient.connected) {
                 mqttClient.end();
@@ -478,10 +782,8 @@
             return;
         }
 
-        // 發送狀態查詢指令
         sendCommand('GET_CONFIG');
 
-        // 設定 5 秒超時倒數，若 5 秒內沒有回應將會再次執行 checkEspOnline
         espPingTimer = setTimeout(() => {
             checkEspOnline();
         }, 5000);
@@ -493,23 +795,31 @@
             espPingTimer = null;
         }
         if (espPingFailCount > 0) {
-            log('【系統提示】收到 ESP32 狀態回應，確認裝置在線上！', 'OK');
+            log('收到 JHZ GarageDoor 狀態回應，確認裝置在線上！', 'OK');
         }
         espPingFailCount = 0;
     }
 
-    // --- 解析來自 ESP32 回傳的狀態與設定 JSON 封包 ---
+    // --- 解析來自 JHZ GarageDoor 回傳的狀態與 JSON 封包 ---
     function parseStatusMessage(dataStr) {
         if (!dataStr) return;
         dataStr = dataStr.trim();
 
-        if (dataStr.startsWith('{')) {
-            // 成功收到 ESP32 的有效回應，重置離線測試計數
+        // 判斷是否為 JHZ GarageDoor 回傳的 JSON 格式
+        if (dataStr.startsWith('{') || dataStr.startsWith('[')) {
             resetEspPingStatus();
 
             try {
                 const data = JSON.parse(dataStr);
 
+                // 情況 1：收到 JHZ GarageDoor 的歷史操作紀錄陣列
+                if (Array.isArray(data)) {
+                    renderEspLogsTable(data);
+                    log(`成功解析 JHZ GarageDoor 回傳之 ${data.length} 筆歷史紀錄！`, 'OK');
+                    return true;
+                }
+
+                // 情況 2：收到系統設定與繼電器狀態封包
                 if (data && Array.isArray(data.relays)) {
                     data.relays.forEach((state, ch) => {
                         if (ch < 4) {
@@ -565,11 +875,12 @@
                     updateInterlockButtonStates();
                 }
 
-                log("【系統提示】已自動將 ESP32 上的已存設定資訊帶入 HTML！", "OK");
-                return;
+                log("已自動將 JHZ GarageDoor 上的已存設定資訊帶入面板！", "OK");
+                return true;
 
             } catch (e) {
-                console.error("JSON 解析錯誤:", e);
+                // 如果 JSON 解析失敗，回傳 false 讓 BLE 暫存機制繼續組合下一個分段封包
+                return false;
             }
         }
 
@@ -582,6 +893,7 @@
                 updateRelayButtonUI(ch, relayStates[ch]);
             }
         }
+        return true;
     }
 
     // --- 發送指令核心 ---
@@ -595,7 +907,6 @@
                 .catch(err => log(`[BLE] 發送失敗: ${err}`, 'ERR'));
         } 
         else if (mqttClient && mqttClient.connected) {
-            // 動態以「MQTT 帳號/cmd」作為指令發布主題
             const user = document.getElementById('mqttUser').value.trim();
             const pubTopic = `${user}/cmd`;
 
@@ -608,6 +919,18 @@
             alert('請先建立 BLE 藍牙連線 或 MQTT 連線！');
             log('發送失敗：未建立任何連線通道。', 'WARN');
         }
+    }
+
+    // 格式化當前系統時間為 YYYY-MM-DD HH:MM:SS
+    function getFormattedCurrentTime() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
     }
 
     // --- BLE 藍牙連線與監聽 ---
@@ -628,10 +951,32 @@
 
             try {
                 await bleCharacteristic.startNotifications();
+                
+                // 監聽 BLE 通知：處理可能發生的分段（Chunking）封包
                 bleCharacteristic.addEventListener('characteristicvaluechanged', (e) => {
-                    const value = new TextDecoder().decode(e.target.value);
-                    log(`[BLE 收到回傳]: ${value}`, 'RECV');
-                    parseStatusMessage(value);
+                    const chunk = new TextDecoder().decode(e.target.value);
+                    bleRxBuffer += chunk; // 拼湊接收到的分段文字
+
+                    log(`[BLE 收到封包區段]: ${chunk}`, 'RECV');
+
+                    if (bleRxTimeout) clearTimeout(bleRxTimeout);
+
+                    // 嘗試解析緩衝區內累積的字串
+                    if (parseStatusMessage(bleRxBuffer)) {
+                        bleRxBuffer = ""; // 解析成功即清空 Buffer
+                    } else {
+                        // 若解析失敗（代表封包未傳送完畢），設定防呆逾時：超過 1.5 秒無新封包則提示錯位
+                        bleRxTimeout = setTimeout(() => {
+                            if (bleRxBuffer.length > 0) {
+                                log(`[BLE] 接收逾時，無法合成完整 JSON: ${bleRxBuffer}`, 'WARN');
+                                const container = document.getElementById('espLogContainer');
+                                if (container.innerHTML.includes('spinner-border')) {
+                                    container.innerHTML = '<div class="text-center text-danger py-4">讀取歷史紀錄失敗：BLE 傳輸資料不完整。</div>';
+                                }
+                                bleRxBuffer = "";
+                            }
+                        }, 1500);
+                    }
                 });
                 log('BLE 通知機制 (Notification) 已啟用。', 'OK');
             } catch(e) {
@@ -644,9 +989,14 @@
             document.getElementById('btnDisconnectBLE').disabled = false;
             log('BLE 藍牙成功建立連線！', 'OK');
 
+            // 【方法一核心】連線後發送時間校時指令給 ESP32
+            const currentTimeStr = getFormattedCurrentTime();
+            log(`[BLE 對時] 主動向 ESP32 發送目前時間: TIME:${currentTimeStr}`, 'INFO');
+            sendCommand(`TIME:${currentTimeStr}`);
+
             setTimeout(() => {
                 sendCommand('GET_CONFIG');
-            }, 500);
+            }, 600);
 
         } catch (error) {
             log(`BLE 連線失敗/取消: ${error}`, 'ERR');
@@ -665,13 +1015,15 @@
         document.getElementById('btnConnectBLE').disabled = false;
         document.getElementById('btnDisconnectBLE').disabled = true;
         bleCharacteristic = null;
+        bleRxBuffer = "";
         log('BLE 藍牙已斷開連線。', 'WARN');
     }
 
     // --- MQTT WebSockets 連線控制 ---
     function toggleMQTT() {
-        if (mqttClient && mqttClient.connected) {
-            mqttClient.end();
+        if (mqttClient && (mqttClient.connected || mqttClient.reconnecting)) {
+            mqttClient.end(true);
+            mqttClient = null;
             return;
         }
 
@@ -689,6 +1041,7 @@
         const options = {
             clean: true,
             connectTimeout: 4000,
+            reconnectPeriod: 0, // 設為 0，防止認證失敗時無限次自動重試連線
             clientId: 'Web_' + user + '_' + Math.random().toString(16).substr(2, 4),
             username: user,
             password: pass
@@ -703,14 +1056,11 @@
             document.getElementById('btnConnectMQTT').className = 'btn btn-danger w-100';
             log('MQTT WebSocket 連線成功！', 'OK');
 
-            // 自動強制訂閱: 使用者名稱/#
             const subTopic = `${user}/#`;
 
             mqttClient.subscribe(subTopic, (err) => {
                 if (!err) {
                     log(`[MQTT] 已成功訂閱主題: ${subTopic}`, 'OK');
-                    
-                    // 連線成功後開始發送在線檢測（重置失敗計數並開啟 5 秒輪詢測試）
                     espPingFailCount = 0;
                     checkEspOnline();
                 } else {
@@ -725,10 +1075,27 @@
             parseStatusMessage(msgStr);
         });
 
-        mqttClient.on('error', (err) => log(`MQTT 錯誤: ${err}`, 'ERR'));
+        mqttClient.on('error', (err) => {
+            log(`MQTT 錯誤: ${err.message || err}`, 'ERR');
+
+            // 判斷是否為帳密錯誤或認證失敗 (Reason Code 4/5 或 Bad username/password)
+            const errCode = err.code;
+            const errMsg = String(err.message || err);
+
+            if (errCode === 4 || errCode === 5 || errMsg.includes('Bad username or password') || errMsg.includes('Not authorized')) {
+                log('連線拒絕：MQTT 帳號或密碼不正確！已停止自動重試。', 'ERR');
+                alert('⚠️ MQTT 連線失敗！\n\n請檢查 MQTT 帳號與密碼是否正確。');
+                
+                // 強制關閉並釋放連線
+                if (mqttClient) {
+                    mqttClient.end(true);
+                    mqttClient = null;
+                }
+            }
+        });
 
         mqttClient.on('close', () => {
-            resetEspPingStatus(); // 關閉連線時清除測試計時器與狀態
+            resetEspPingStatus();
             document.getElementById('mqttStatus').className = 'badge bg-secondary status-badge';
             document.getElementById('mqttStatus').innerText = '未連線';
             document.getElementById('btnConnectMQTT').innerText = '連線 MQTT';
